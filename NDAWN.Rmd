@@ -1,0 +1,100 @@
+---
+title: "ND Ag Weather Network Website Scrape"
+author: "Drew Sandberg"
+date: "7/27/2021"
+output: html_document
+---
+
+```{r}
+#Required libraries
+  library(tidyverse)
+  library(rvest)
+  library(xlsx)
+
+# Date Variables; want yesterday, 3 day total and 7-day total
+  startDate = Sys.Date()-7
+  endDate = Sys.Date()-1
+  currDate = Sys.Date()
+  yr = lubridate::year(Sys.Date())
+  
+# StationIDs are reference to NDAWN location IDs which are present in URL
+  # Lisbon:             76
+  # Ottertail:          103
+  # Perham:             114
+  # Pine Point:         115
+  # Parkers Prairie:    116
+  # Wadena:             117
+  # Becker:             118
+  # Hubbard:            119
+  # Little Falls:       120
+  # Rice:               121
+  # Staples:            122
+  # Westport(Brooten):  123
+  # Clarissa:           124
+  wxStationID = c(76, 103, 114:124)
+
+# Location names are NDAWN names; correspond to station IDs.
+  NDAWNLocation = c("Lisbon", "Ottertail", "Perham", "Pine Point", 
+                    "Parkers Prairie", "Wadena", "Becker", "Hubbard", 
+                    "Little Falls", "Rice", "Staples", "Westport/Brooten", 
+                    "Clarissa")
+
+# Final table structure
+  df = data.frame("Location" = as.character(),
+                  "Yesterday" = as.numeric(),
+                  "ThreeDayET" = as.numeric(),
+                  "SevenDayET" = as.numeric())
+
+# Loop through desired locations
+for (i in 1:length(wxStationID)){
+
+  # Generate URL to NDAWN Penman ET location for a date range
+    url = paste0('https://ndawn.ndsu.nodak.edu/get-table.html?station=',
+                 wxStationID[i],
+                 '&variable=ddtpetp&year=',
+                 yr,
+                 '&ttype=daily&quick_pick=&begin_date=',
+                 startDate,
+                 '&end_date=',
+                 endDate,'')
+  
+  # Extract table from webpage
+    datatable = url %>%
+      read_html() %>%
+      html_nodes("table") %>%
+      .[[4]] %>%
+      html_table()
+  
+  # Populate variables for location and ET subtotals
+    Location = NDAWNLocation[i]
+    ETr_PreviousDay = as.numeric(datatable[2:2,2])
+    ETr_3Day = sum(as.numeric(unlist(datatable[2:4,2])))
+    ETr_7Day = sum(as.numeric(unlist(datatable[2:8,2])))
+
+  # Add records to final table
+    df = rbind(df, c(Location, ETr_PreviousDay, ETr_3Day, ETr_7Day))
+}
+
+# Add Current Date to table
+  df$CurrentDate = Sys.Date()
+  
+# Add URL for heatmap visual of 7-day cumulative reference ET
+  df$MapULR = paste0("https://ndawn.ndsu.nodak.edu/map.png?mtype=daily&v=ddtpetpm&c=c&begin_date=",
+                     startDate,
+                     "&end_date=",
+                     endDate
+                     )
+    
+# Reset column names; don't know why rbind messes w/ names  
+  colnames(df) = c("Location", "ETr_PreviousDay", "ETr_3Day", 
+                   "ETr_7Day", "CreatedDate", "MapURL")
+
+#Sort the table by location
+  df = df %>% arrange(Location)
+  
+#write_csv(df, "c:/temp/ndawn.csv")
+  write.xlsx(df, 
+             "c:/temp/ndawn.xlsx", 
+             col.names = TRUE)
+
+```
